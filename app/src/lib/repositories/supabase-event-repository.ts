@@ -27,33 +27,51 @@ export interface EventWithStats extends Event {
 
 class SupabaseEventRepository {
   async getAllEvents(): Promise<EventWithStats[]> {
+    // Get all events
     const { data: events, error } = await supabase
       .from('events')
-      .select(`
-        *,
-        categories:categories(count),
-        participants:categories(participants(count))
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!events) return [];
 
-    return events.map((event: any) => ({
-      ...event,
-      categoryCount: event.categories?.[0]?.count || 0,
-      participantCount: event.participants?.reduce((sum: number, cat: any) => 
-        sum + (cat.participants?.[0]?.count || 0), 0) || 0,
-    }));
+    // Get counts for each event
+    const eventsWithStats = await Promise.all(
+      events.map(async (event) => {
+        // Count categories
+        const { count: categoryCount } = await supabase
+          .from('categories')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', event.id);
+
+        // Count participants
+        const { count: participantCount } = await supabase
+          .from('participants')
+          .select('*', { count: 'exact', head: true })
+          .in('category_id', 
+            (await supabase
+              .from('categories')
+              .select('id')
+              .eq('event_id', event.id)
+            ).data?.map(c => c.id) || []
+          );
+
+        return {
+          ...event,
+          categoryCount: categoryCount || 0,
+          participantCount: participantCount || 0,
+        };
+      })
+    );
+
+    return eventsWithStats;
   }
 
   async getEventById(id: string): Promise<EventWithStats | null> {
     const { data: event, error } = await supabase
       .from('events')
-      .select(`
-        *,
-        categories:categories(count),
-        participants:categories(participants(count))
-      `)
+      .select('*')
       .eq('id', id)
       .single();
 
@@ -62,11 +80,28 @@ class SupabaseEventRepository {
       throw error;
     }
 
+    // Count categories
+    const { count: categoryCount } = await supabase
+      .from('categories')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_id', id);
+
+    // Count participants
+    const { count: participantCount } = await supabase
+      .from('participants')
+      .select('*', { count: 'exact', head: true })
+      .in('category_id', 
+        (await supabase
+          .from('categories')
+          .select('id')
+          .eq('event_id', id)
+        ).data?.map(c => c.id) || []
+      );
+
     return {
       ...event,
-      categoryCount: event.categories?.[0]?.count || 0,
-      participantCount: event.participants?.reduce((sum: number, cat: any) => 
-        sum + (cat.participants?.[0]?.count || 0), 0) || 0,
+      categoryCount: categoryCount || 0,
+      participantCount: participantCount || 0,
     };
   }
 
