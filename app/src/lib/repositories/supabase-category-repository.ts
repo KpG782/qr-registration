@@ -22,47 +22,64 @@ export interface CategoryWithStats extends Category {
 
 class SupabaseCategoryRepository {
   async getAllCategories(): Promise<CategoryWithStats[]> {
-    const { data, error } = await supabase
+    const { data: categories, error } = await supabase
       .from('categories')
-      .select(`
-        *,
-        participants:participants(count)
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!categories) return [];
 
-    return data.map((cat: any) => ({
-      ...cat,
-      participantCount: cat.participants?.[0]?.count || 0,
-    }));
+    // Get participant counts
+    const categoriesWithStats = await Promise.all(
+      categories.map(async (category) => {
+        const { count } = await supabase
+          .from('participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('category_id', category.id);
+
+        return {
+          ...category,
+          participantCount: count || 0,
+        };
+      })
+    );
+
+    return categoriesWithStats;
   }
 
   async getCategoriesByEventId(eventId: string): Promise<CategoryWithStats[]> {
-    const { data, error } = await supabase
+    const { data: categories, error } = await supabase
       .from('categories')
-      .select(`
-        *,
-        participants:participants(count)
-      `)
+      .select('*')
       .eq('event_id', eventId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!categories) return [];
 
-    return data.map((cat: any) => ({
-      ...cat,
-      participantCount: cat.participants?.[0]?.count || 0,
-    }));
+    // Get participant counts
+    const categoriesWithStats = await Promise.all(
+      categories.map(async (category) => {
+        const { count } = await supabase
+          .from('participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('category_id', category.id);
+
+        return {
+          ...category,
+          participantCount: count || 0,
+        };
+      })
+    );
+
+    return categoriesWithStats;
   }
 
   async getCategoryById(id: string): Promise<CategoryWithStats | null> {
-    const { data, error } = await supabase
+    const { data: category, error } = await supabase
       .from('categories')
-      .select(`
-        *,
-        participants:participants(count)
-      `)
+      .select('*')
       .eq('id', id)
       .single();
 
@@ -71,9 +88,15 @@ class SupabaseCategoryRepository {
       throw error;
     }
 
+    // Get participant count
+    const { count } = await supabase
+      .from('participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('category_id', id);
+
     return {
-      ...data,
-      participantCount: data.participants?.[0]?.count || 0,
+      ...category,
+      participantCount: count || 0,
     };
   }
 
