@@ -1,3 +1,9 @@
+/**
+ * DEPRECATED: This file is no longer used.
+ * The application now uses Supabase exclusively for all database operations.
+ * See app/src/lib/supabase.ts and the repository files in app/src/lib/repositories/
+ */
+
 import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import path from 'path';

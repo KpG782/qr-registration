@@ -1,4 +1,4 @@
-import getDb, { generateId } from '../db';
+import { supabase } from '../supabase';
 
 export interface Event {
   id: string;
@@ -26,89 +26,109 @@ export interface EventWithStats extends Event {
 }
 
 class EventRepository {
-  getAllEvents(): EventWithStats[] {
-    const db = getDb();
-    const events = db.prepare(`
-      SELECT 
-        e.*,
-        COUNT(DISTINCT c.id) as categoryCount,
-        COUNT(DISTINCT p.id) as participantCount
-      FROM events e
-      LEFT JOIN categories c ON c.event_id = e.id
-      LEFT JOIN participants p ON p.category_id = c.id
-      GROUP BY e.id
-      ORDER BY e.created_at DESC
-    `).all() as EventWithStats[];
-    
-    return events;
-  }
+  async getAllEvents(): Promise<EventWithStats[]> {
+    const { data: events, error } = await supabase
+      .from('events')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  getEventById(id: string): EventWithStats | null {
-    const db = getDb();
-    const event = db.prepare(`
-      SELECT 
-        e.*,
-        COUNT(DISTINCT c.id) as categoryCount,
-        COUNT(DISTINCT p.id) as participantCount
-      FROM events e
-      LEFT JOIN categories c ON c.event_id = e.id
-      LEFT JOIN participants p ON p.category_id = c.id
-      WHERE e.id = ?
-      GROUP BY e.id
-    `).get(id) as EventWithStats | undefined;
-    
-    return event || null;
-  }
-
-  createEvent(input: CreateEventInput): Event {
-    const db = getDb();
-    const id = generateId();
-    const date = input.date ? Math.floor(input.date.getTime() / 1000) : null;
-    
-    db.prepare(`
-      INSERT INTO events (id, name, description, date)
-      VALUES (?, ?, ?, ?)
-    `).run(id, input.name, input.description || null, date);
-    
-    return this.getEventById(id) as Event;
-  }
-
-  updateEvent(id: string, input: UpdateEventInput): Event | null {
-    const db = getDb();
-    const updates: string[] = [];
-    const values: any[] = [];
-    
-    if (input.name !== undefined) {
-      updates.push('name = ?');
-      values.push(input.name);
+    if (error) {
+      console.error('getAllEvents error:', error);
+      throw error;
     }
-    if (input.description !== undefined) {
-      updates.push('description = ?');
-      values.push(input.description);
+    
+    if (!events) return [];
+
+    // Return with zero stats for performance
+    return events.map(event => ({
+      ...event,
+      categoryCount: 0,
+      participantCount: 0,
+    }));
+  }
+
+  async getEventById(id: string): Promise<EventWithStats | null> {
+    const { data: event, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      console.error('getEventById error:', error);
+      throw error;
     }
+
+    // Get counts
+    const { count: categoryCount } = await supabase
+      .from('categories')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_id', id);
+
+    return {
+      ...event,
+      categoryCount: categoryCount || 0,
+      participantCount: 0,
+    };
+  }
+
+  async createEvent(input: CreateEventInput): Promise<Event> {
+    const { data, error } = await supabase
+      .from('events')
+      .insert({
+        name: input.name,
+        description: input.description || null,
+        date: input.date ? Math.floor(input.date.getTime() / 1000) : null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('createEvent error:', error);
+      throw error;
+    }
+    
+    return data;
+  }
+
+  async updateEvent(id: string, input: UpdateEventInput): Promise<Event | null> {
+    const updates: any = {};
+    
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.description !== undefined) updates.description = input.description;
     if (input.date !== undefined) {
-      updates.push('date = ?');
-      values.push(input.date ? Math.floor(input.date.getTime() / 1000) : null);
+      updates.date = input.date ? Math.floor(input.date.getTime() / 1000) : null;
     }
-    
-    if (updates.length === 0) {
-      return this.getEventById(id);
+
+    const { data, error } = await supabase
+      .from('events')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      console.error('updateEvent error:', error);
+      throw error;
     }
-    
-    values.push(id);
-    db.prepare(`
-      UPDATE events
-      SET ${updates.join(', ')}
-      WHERE id = ?
-    `).run(...values);
-    
-    return this.getEventById(id);
+
+    return data;
   }
 
-  deleteEvent(id: string): boolean {
-    const db = getDb();
-    const result = db.prepare('DELETE FROM events WHERE id = ?').run(id);
-    return result.changes > 0;
+  async deleteEvent(id: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('deleteEvent error:', error);
+      throw error;
+    }
+    
+    return true;
   }
 }
 

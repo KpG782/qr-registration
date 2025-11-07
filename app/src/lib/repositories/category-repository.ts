@@ -1,4 +1,4 @@
-import getDb, { generateId } from '../db';
+import { supabase } from '../supabase';
 
 export interface Category {
   id: string;
@@ -21,82 +21,145 @@ export interface CategoryWithStats extends Category {
 }
 
 class CategoryRepository {
-  getAllCategories(): CategoryWithStats[] {
-    const db = getDb();
-    const categories = db.prepare(`
-      SELECT 
-        c.*,
-        COUNT(p.id) as participantCount
-      FROM categories c
-      LEFT JOIN participants p ON p.category_id = c.id
-      GROUP BY c.id
-      ORDER BY c.created_at DESC
-    `).all() as CategoryWithStats[];
-    
-    return categories;
-  }
+  async getAllCategories(): Promise<CategoryWithStats[]> {
+    const { data: categories, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  getCategoriesByEventId(eventId: string): CategoryWithStats[] {
-    const db = getDb();
-    const categories = db.prepare(`
-      SELECT 
-        c.*,
-        COUNT(p.id) as participantCount
-      FROM categories c
-      LEFT JOIN participants p ON p.category_id = c.id
-      WHERE c.event_id = ?
-      GROUP BY c.id
-      ORDER BY c.created_at DESC
-    `).all(eventId) as CategoryWithStats[];
-    
-    return categories;
-  }
-
-  getCategoryById(id: string): CategoryWithStats | null {
-    const db = getDb();
-    const category = db.prepare(`
-      SELECT 
-        c.*,
-        COUNT(p.id) as participantCount
-      FROM categories c
-      LEFT JOIN participants p ON p.category_id = c.id
-      WHERE c.id = ?
-      GROUP BY c.id
-    `).get(id) as CategoryWithStats | undefined;
-    
-    return category || null;
-  }
-
-  createCategory(input: CreateCategoryInput): Category {
-    const db = getDb();
-    const id = generateId();
-    
-    db.prepare(`
-      INSERT INTO categories (id, event_id, name)
-      VALUES (?, ?, ?)
-    `).run(id, input.eventId, input.name);
-    
-    return this.getCategoryById(id) as Category;
-  }
-
-  updateCategory(id: string, input: UpdateCategoryInput): Category | null {
-    const db = getDb();
-    
-    if (input.name !== undefined) {
-      db.prepare(`
-        UPDATE categories
-        SET name = ?
-        WHERE id = ?
-      `).run(input.name, id);
+    if (error) {
+      console.error('getAllCategories error:', error);
+      throw error;
     }
-    
-    return this.getCategoryById(id);
+
+    if (!categories) return [];
+
+    // Get participant counts separately for performance
+    const categoriesWithStats = await Promise.all(
+      categories.map(async (category) => {
+        const { count } = await supabase
+          .from('participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('category_id', category.id);
+
+        return {
+          ...category,
+          participantCount: count || 0,
+        };
+      })
+    );
+
+    return categoriesWithStats;
   }
 
-  deleteCategory(id: string): boolean {
-    const db = getDb();
-    const result = db.prepare('DELETE FROM categories WHERE id = ?').run(id);
-    return result.changes > 0;
+  async getCategoriesByEventId(eventId: string): Promise<CategoryWithStats[]> {
+    const { data: categories, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('getCategoriesByEventId error:', error);
+      throw error;
+    }
+
+    if (!categories) return [];
+
+    // Get participant counts separately for performance
+    const categoriesWithStats = await Promise.all(
+      categories.map(async (category) => {
+        const { count } = await supabase
+          .from('participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('category_id', category.id);
+
+        return {
+          ...category,
+          participantCount: count || 0,
+        };
+      })
+    );
+
+    return categoriesWithStats;
+  }
+
+  async getCategoryById(id: string): Promise<CategoryWithStats | null> {
+    const { data: category, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      console.error('getCategoryById error:', error);
+      throw error;
+    }
+
+    // Get participant count
+    const { count } = await supabase
+      .from('participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('category_id', id);
+
+    return {
+      ...category,
+      participantCount: count || 0,
+    };
+  }
+
+  async createCategory(input: CreateCategoryInput): Promise<Category> {
+    const { data, error } = await supabase
+      .from('categories')
+      .insert({
+        event_id: input.eventId,
+        name: input.name,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('createCategory error:', error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  async updateCategory(id: string, input: UpdateCategoryInput): Promise<Category | null> {
+    const updates: any = {};
+
+    if (input.name !== undefined) updates.name = input.name;
+
+    const { data, error } = await supabase
+      .from('categories')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      console.error('updateCategory error:', error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  async deleteCategory(id: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('deleteCategory error:', error);
+      throw error;
+    }
+
+    return true;
   }
 }
 

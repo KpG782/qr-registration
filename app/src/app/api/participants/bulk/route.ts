@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const result = participantRepository.bulkCreateParticipants(
+    const result = await participantRepository.bulkCreateParticipants(
       participants.map((p: any) => ({
         categoryId,
         email: p.email,

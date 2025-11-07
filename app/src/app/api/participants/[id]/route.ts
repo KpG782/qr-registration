@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const participant = participantRepository.getParticipantById(id);
+    const participant = await participantRepository.getParticipantById(id);
 
     if (!participant) {
       return NextResponse.json(
@@ -33,7 +33,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const participant = participantRepository.updateParticipant(id, body);
+    const participant = await participantRepository.updateParticipant(id, body);
 
     if (!participant) {
       return NextResponse.json(
@@ -57,7 +57,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const success = participantRepository.deleteParticipant(id);
+    const success = await participantRepository.deleteParticipant(id);
 
     if (!success) {
       return NextResponse.json(

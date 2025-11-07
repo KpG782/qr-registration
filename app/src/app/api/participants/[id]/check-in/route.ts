@@ -7,7 +7,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const participant = participantRepository.checkInParticipant(id);
+    const participant = await participantRepository.checkInParticipant(id);
 
     if (!participant) {
       return NextResponse.json(

@@ -3,7 +3,7 @@ import { eventRepository } from '@/lib/repositories/event-repository';
 
 export async function GET() {
   try {
-    const events = eventRepository.getAllEvents();
+    const events = await eventRepository.getAllEvents();
     return NextResponse.json(events);
   } catch (error) {
     return NextResponse.json(
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const event = eventRepository.createEvent({
+    const event = await eventRepository.createEvent({
       name,
       description,
       date: date ? new Date(date) : undefined,

@@ -7,11 +7,11 @@ export async function GET(request: NextRequest) {
     const categoryId = searchParams.get('categoryId');
 
     if (categoryId) {
-      const participants = participantRepository.getParticipantsByCategoryId(categoryId);
+      const participants = await participantRepository.getParticipantsByCategoryId(categoryId);
       return NextResponse.json(participants);
     }
 
-    const participants = participantRepository.getAllParticipants();
+    const participants = await participantRepository.getAllParticipants();
     return NextResponse.json(participants);
   } catch (error) {
     return NextResponse.json(
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const participant = participantRepository.createParticipant({
+    const participant = await participantRepository.createParticipant({
       categoryId,
       email,
       fullName,
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(participant, { status: 201 });
   } catch (error: any) {
-    if (error.message?.includes('UNIQUE constraint failed')) {
+    if (error.code === '23505') {
       return NextResponse.json(
         { error: 'A participant with this email already exists in this category' },
         { status: 409 }
