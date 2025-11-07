@@ -7,13 +7,14 @@ export async function GET(request: NextRequest) {
     const eventId = searchParams.get('eventId');
 
     if (eventId) {
-      const categories = categoryRepository.getCategoriesByEventId(eventId);
+      const categories = await categoryRepository.getCategoriesByEventId(eventId);
       return NextResponse.json(categories);
     }
 
-    const categories = categoryRepository.getAllCategories();
+    const categories = await categoryRepository.getAllCategories();
     return NextResponse.json(categories);
   } catch (error) {
+    console.error('GET /api/categories error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch categories' },
       { status: 500 }
@@ -33,13 +34,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const category = categoryRepository.createCategory({
+    const category = await categoryRepository.createCategory({
       eventId,
       name,
     });
 
     return NextResponse.json(category, { status: 201 });
   } catch (error) {
+    console.error('POST /api/categories error:', error);
     return NextResponse.json(
       { error: 'Failed to create category' },
       { status: 500 }

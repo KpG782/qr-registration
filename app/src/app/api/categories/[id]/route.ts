@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const category = categoryRepository.getCategoryById(id);
+    const category = await categoryRepository.getCategoryById(id);
 
     if (!category) {
       return NextResponse.json(
@@ -18,6 +18,7 @@ export async function GET(
 
     return NextResponse.json(category);
   } catch (error) {
+    console.error('GET /api/categories/[id] error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch category' },
       { status: 500 }
@@ -34,7 +35,7 @@ export async function PATCH(
     const body = await request.json();
     const { name } = body;
 
-    const category = categoryRepository.updateCategory(id, { name });
+    const category = await categoryRepository.updateCategory(id, { name });
 
     if (!category) {
       return NextResponse.json(
@@ -45,6 +46,7 @@ export async function PATCH(
 
     return NextResponse.json(category);
   } catch (error) {
+    console.error('PATCH /api/categories/[id] error:', error);
     return NextResponse.json(
       { error: 'Failed to update category' },
       { status: 500 }
@@ -58,7 +60,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const success = categoryRepository.deleteCategory(id);
+    const success = await categoryRepository.deleteCategory(id);
 
     if (!success) {
       return NextResponse.json(
@@ -69,6 +71,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('DELETE /api/categories/[id] error:', error);
     return NextResponse.json(
       { error: 'Failed to delete category' },
       { status: 500 }
