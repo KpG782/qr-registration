@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { categoryRepository } from '@/lib/repositories/category-repository';
+import { categoryRepository } from '@/lib/repositories';
 
 export async function GET(request: NextRequest) {
   try {

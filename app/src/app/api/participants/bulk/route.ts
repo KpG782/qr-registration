@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { participantRepository } from '@/lib/repositories/participant-repository';
+import { participantRepository } from '@/lib/repositories';
 
 export async function POST(request: NextRequest) {
   try {
