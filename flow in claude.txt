@@ -1,0 +1,387 @@
+# Event QR Registration System - Spec-Driven Plan
+
+## 🎯 System Overview
+Offline-first QR registration system for multi-event, multi-category competitions like ICT Olympics with ~90 categories per event.
+
+## 📊 Core Flow
+
+```
+1. Create Event → 2. Add Categories → 3. Upload Participants → 4. Generate QR Codes
+                                                                           ↓
+5. User Scans QR → 6. Authenticate → 7. Confirm Identity → 8. Mark Attendance
+```
+
+## 🏗️ Architecture Decisions
+
+### Database Schema (SQLite → Supabase)
+```
+events
+├── id (uuid)
+├── name (text)
+├── description (text)
+├── date (timestamp)
+└── created_at (timestamp)
+
+categories
+├── id (uuid)
+├── event_id (foreign key)
+├── name (text)
+└── created_at (timestamp)
+
+participants
+├── id (uuid)
+├── category_id (foreign key)
+├── email (text, unique per category)
+├── full_name (text)
+├── school_institution (text, optional)
+├── attendance_status (enum: pending, checked_in)
+├── checked_in_at (timestamp, nullable)
+├── winner_rank (integer, nullable) // 1st, 2nd, 3rd place
+└── created_at (timestamp)
+```
+
+### Tech Stack
+- **Frontend**: Next.js 14+ (App Router)
+- **UI**: shadcn/ui + Tailwind
+- **Database**: SQLite (local) → Supabase (sync at 50 users)
+- **Auth**: Supabase Auth (Google OAuth - simplest & most secure)
+- **File Upload**: CSV/Excel parsing with `papaparse` or `xlsx`
+- **QR Generation**: `qrcode` library
+- **Offline**: IndexedDB for local caching
+
+## 🔐 Security Approach
+
+**Best Method: Magic Link + Email Verification**
+- User scans QR → Redirected to `/check-in/[categoryId]`
+- Enter email → System sends magic link (Supabase Auth)
+- Click link → Auto-fills their name from database
+- Confirm identity → Attendance marked
+
+**Why this is best:**
+- No password management
+- Secure (one-time use links)
+- Fast for users (just email)
+- Works offline (queue the check-ins)
+
+## 📁 File Upload Strategy
+
+**Recommended: CSV/Excel Upload**
+
+Expected columns:
+```
+email, full_name, school_institution (optional)
+```
+
+Alternative: Simple form to add participants one-by-one
+
+## 🎨 UI/UX Flow
+
+### Admin Dashboard
+1. **Events Page** → List all events (create new button)
+2. **Event Detail** → Show categories + stats
+3. **Category Detail** → Participant list table + QR code
+4. **Upload Modal** → Drag-drop CSV/Excel
+
+### User Check-in Flow
+1. Scan QR → Land on check-in page
+2. Enter email → Receive magic link
+3. Click link → See pre-filled name
+4. Tap "Confirm Attendance"
+5. Success screen ✓
+
+## 🚀 Kiro Spec-Driven Approach
+
+### Phase 1: Core Spec Files
+
+Create these specs in Kiro:
+
+**`/specs/database.md`**
+```markdown
+# Database Schema
+
+## Tables
+
+### events
+- id: uuid primary key
+- name: text not null
+- description: text
+- date: timestamp
+- created_at: timestamp default now()
+
+### categories
+- id: uuid primary key
+- event_id: uuid references events(id) on delete cascade
+- name: text not null
+- created_at: timestamp default now()
+
+### participants
+- id: uuid primary key
+- category_id: uuid references categories(id) on delete cascade
+- email: text not null
+- full_name: text not null
+- school_institution: text
+- attendance_status: text check(attendance_status in ('pending','checked_in')) default 'pending'
+- checked_in_at: timestamp
+- winner_rank: integer check(winner_rank in (1,2,3))
+- created_at: timestamp default now()
+- unique(category_id, email)
+```
+
+**`/specs/features.md`**
+```markdown
+# Feature Specifications
+
+## 1. Event Management
+- Create event with name, description, date
+- View all events in card grid
+- Edit/delete events
+
+## 2. Category Management
+- Add categories to event (one-by-one or bulk)
+- Each category gets unique QR code
+- QR encodes: https://yourdomain.com/check-in/[categoryId]
+
+## 3. Participant Upload
+- Upload CSV/Excel with columns: email, full_name, school_institution
+- Validate emails (must be unique per category)
+- Preview before import
+- Bulk import with progress indicator
+
+## 4. QR Check-in Flow
+- Scan QR → redirect to check-in page
+- Enter email → send magic link via Supabase Auth
+- Click link → auto-fill name from database
+- Confirm button → mark attendance + timestamp
+- Show success message
+
+## 5. Attendance Tracking
+- Real-time attendance counter per category
+- Table view: show all participants with status
+- Filter: Show All | Checked In | Pending
+- Manual check-in toggle (backup)
+
+## 6. Winner Management
+- Admin can mark 1st, 2nd, 3rd place per category
+- Badge display on participant row
+- Export winners list
+
+## 7. Offline Support
+- Queue check-ins when offline
+- Sync to Supabase when online
+- Show offline indicator in UI
+```
+
+**`/specs/routes.md`**
+```markdown
+# Application Routes
+
+## Admin Routes (Protected)
+- `/dashboard` - Overview of all events
+- `/events` - List all events
+- `/events/new` - Create new event
+- `/events/[id]` - Event detail + categories
+- `/events/[id]/categories/[categoryId]` - Category detail + participants
+- `/events/[id]/categories/[categoryId]/upload` - Upload participants
+
+## Public Routes
+- `/check-in/[categoryId]` - User check-in flow
+- `/check-in/[categoryId]/success` - Confirmation screen
+
+## API Routes
+- `/api/events` - CRUD operations
+- `/api/categories` - CRUD operations
+- `/api/participants` - CRUD + bulk import
+- `/api/check-in` - Mark attendance
+- `/api/sync` - Sync SQLite → Supabase
+```
+
+**`/specs/components.md`**
+```markdown
+# Component Specifications
+
+## UI Components (shadcn/ui)
+- Button
+- Card
+- Table + DataTable
+- Dialog
+- Form + Input
+- Badge
+- Alert
+- Progress
+- Tabs
+- Select
+- Checkbox
+- Separator
+
+## Custom Components
+
+### EventCard
+Props: event (name, date, categoryCount)
+Shows event info with action buttons
+
+### CategoryTable
+Props: categories[]
+Displays categories with QR code preview
+
+### ParticipantTable
+Props: participants[]
+Shows email, name, status, check-in time
+Actions: manual check-in, mark winner
+
+### QRCodeDisplay
+Props: categoryId
+Generates and displays QR code
+Download button
+
+### FileUpload
+Props: onUpload
+Drag-drop CSV/Excel
+Preview parsed data before import
+
+### AttendanceStats
+Props: total, checkedIn
+Progress bar visualization
+```
+
+### Phase 2: Kiro Commands
+
+When working in Kiro, use these patterns:
+
+**Initial Setup:**
+```
+Create Next.js 14 app with App Router, TypeScript, Tailwind, and shadcn/ui. 
+Set up SQLite with better-sqlite3. Create database schema from /specs/database.md
+```
+
+**Build Features:**
+```
+Implement event management from /specs/features.md section 1. 
+Create pages in /app/events following /specs/routes.md. 
+Use EventCard component from /specs/components.md
+```
+
+**Iterate:**
+```
+Add participant upload feature. Use papaparse for CSV parsing. 
+Implement FileUpload component with preview modal. 
+Follow validation rules from /specs/features.md
+```
+
+### Phase 3: Development Order
+
+1. **Database Setup** (30 min)
+   - SQLite schema
+   - Supabase project setup
+   - Migration scripts
+
+2. **Admin Dashboard** (2-3 hours)
+   - Event CRUD
+   - Category CRUD
+   - Basic layout
+
+3. **Participant Management** (2-3 hours)
+   - File upload
+   - Table display
+   - Manual add/edit
+
+4. **QR Generation** (1 hour)
+   - Generate per category
+   - Download functionality
+
+5. **Check-in Flow** (3-4 hours)
+   - Public landing page
+   - Supabase Auth integration
+   - Attendance marking
+   - Success screen
+
+6. **Offline Support** (2-3 hours)
+   - IndexedDB setup
+   - Queue system
+   - Sync logic
+
+7. **Winner Management** (1 hour)
+   - UI for marking winners
+   - Badge display
+
+## 🎯 Quick Start Commands for Kiro
+
+```bash
+# 1. Initialize project
+npx create-next-app@latest qr-registration --typescript --tailwind --app
+
+# 2. Install dependencies
+npm install @supabase/supabase-js better-sqlite3 qrcode papaparse
+npm install -D @types/better-sqlite3 @types/qrcode @types/papaparse
+
+# 3. Initialize shadcn
+npx shadcn@latest init
+npx shadcn@latest add button card table dialog form input badge alert
+```
+
+## 📝 Kiro Workflow Tips
+
+1. **Start with specs first** - Write all `.md` files in `/specs`
+2. **Reference specs in prompts** - "Follow /specs/database.md to create..."
+3. **Build incrementally** - One feature at a time
+4. **Test after each feature** - Don't move forward until current works
+5. **Use natural language** - Kiro understands context from specs
+
+## 🔄 SQLite → Supabase Sync Strategy
+
+**When to sync:** After 50 participants OR manual trigger
+
+**Sync function:**
+```typescript
+// Check participant count
+if (count >= 50 || manualTrigger) {
+  // 1. Get all SQLite data
+  // 2. Batch insert to Supabase
+  // 3. Mark as synced in SQLite
+  // 4. Continue using Supabase for new data
+}
+```
+
+## ⚡ Performance Optimizations
+
+- Virtual scrolling for large participant lists
+- Lazy load QR codes
+- Debounce search/filter
+- IndexedDB for offline data
+- Optimistic UI updates
+
+## 🎨 Simple UI Example
+
+```
+┌─────────────────────────────────────┐
+│  📊 ICT Olympics 2025               │
+├─────────────────────────────────────┤
+│                                     │
+│  [+ New Event]                      │
+│                                     │
+│  ┌───────────────┐ ┌──────────────┐│
+│  │ Android Dev   │ │ Web Dev      ││
+│  │ 15 Categories │ │ 12 Categories││
+│  │ 450 Students  │ │ 380 Students ││
+│  └───────────────┘ └──────────────┘│
+│                                     │
+│  ┌───────────────┐                 │
+│  │ Python        │                 │
+│  │ 8 Categories  │                 │
+│  │ 220 Students  │                 │
+│  └───────────────┘                 │
+└─────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Next Steps
+
+1. Create Supabase project
+2. Set up specs in `/specs` folder
+3. Tell Kiro: "Build QR registration system following specs in /specs folder. Start with database setup."
+4. Let Kiro generate code incrementally
+5. Test each feature before moving on
+
+**This approach is simple, scalable, and perfect for your offline-first needs!** The magic link authentication is the sweet spot for security + UX.
+
+Want me to create any specific spec file or help with the Kiro prompts?
