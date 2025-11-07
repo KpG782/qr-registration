@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const event = eventRepository.getEventById(id);
+    const event = await eventRepository.getEventById(id);
 
     if (!event) {
       return NextResponse.json(
@@ -18,6 +18,7 @@ export async function GET(
 
     return NextResponse.json(event);
   } catch (error) {
+    console.error('GET /api/events/[id] error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch event' },
       { status: 500 }
@@ -34,7 +35,7 @@ export async function PATCH(
     const body = await request.json();
     const { name, description, date } = body;
 
-    const event = eventRepository.updateEvent(id, {
+    const event = await eventRepository.updateEvent(id, {
       name,
       description,
       date: date ? new Date(date) : undefined,
@@ -49,6 +50,7 @@ export async function PATCH(
 
     return NextResponse.json(event);
   } catch (error) {
+    console.error('PATCH /api/events/[id] error:', error);
     return NextResponse.json(
       { error: 'Failed to update event' },
       { status: 500 }
@@ -62,7 +64,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const success = eventRepository.deleteEvent(id);
+    const success = await eventRepository.deleteEvent(id);
 
     if (!success) {
       return NextResponse.json(
@@ -73,6 +75,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('DELETE /api/events/[id] error:', error);
     return NextResponse.json(
       { error: 'Failed to delete event' },
       { status: 500 }
