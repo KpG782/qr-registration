@@ -25,8 +25,11 @@ export function EventCard({ event, onDelete }: EventCardProps) {
   };
 
   return (
-    <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-      <CardHeader onClick={() => router.push(`/dashboard/events/${event.id}`)}>
+    <Card 
+      className="cursor-pointer hover:shadow-lg transition-shadow"
+      onClick={() => router.push(`/dashboard/events/${event.id}`)}
+    >
+      <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Calendar className="h-5 w-5" />
           {event.name}
